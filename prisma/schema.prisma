@@ -1,0 +1,145 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String      @id @default(cuid())
+  name          String      @db.Text
+  email         String      @unique
+  emailVerified Boolean     @default(false)
+  image         String?     @db.Text
+  phoneNumber   String?     @unique
+  role          String      @default("customer")
+  banned        Boolean     @default(false)
+  banReason     String?
+  banExpires    DateTime?
+  deletedAt     DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+  groups        UserGroup[]
+  auditLogs     AuditLog[]  @relation("AuditActor")
+
+  @@index([deletedAt, createdAt])
+  @@index([name])
+  @@map("user")
+}
+
+model Session {
+  id             String   @id @default(cuid())
+  expiresAt      DateTime
+  token          String   @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  ipAddress      String?  @db.Text
+  userAgent      String?  @db.Text
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  impersonatedBy String?
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String    @db.Text
+  providerId            String    @db.Text
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?   @db.Text
+  refreshToken          String?   @db.Text
+  idToken               String?   @db.Text
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?   @db.Text
+  password              String?   @db.Text
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@unique([providerId, accountId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String   @db.Text
+  value      String   @db.Text
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+model Group {
+  id          String            @id @default(uuid())
+  slug        String            @unique @db.VarChar(100)
+  name        String            @db.VarChar(100)
+  description String?           @db.VarChar(500)
+  active      Boolean           @default(true)
+  isSystem    Boolean           @default(false)
+  deletedAt   DateTime?
+  createdBy   String
+  updatedBy   String
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  permissions GroupPermission[]
+  users       UserGroup[]
+
+  @@index([deletedAt, active])
+  @@map("group")
+}
+
+model UserGroup {
+  userId  String
+  groupId String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([userId, groupId])
+  @@index([groupId])
+  @@map("user_group")
+}
+
+model GroupPermission {
+  groupId    String
+  permission String       @db.VarChar(120)
+  group      Group        @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, permission])
+  @@map("group_permission")
+}
+
+model Permission {
+  key         String   @id @db.VarChar(120)
+  description String   @db.VarChar(255)
+  appName     String   @default("core") @db.VarChar(100)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("permission")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  actorId   String?
+  actor     User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  action    String   @db.VarChar(120)
+  targetId  String?  @db.VarChar(120)
+  metadata  Json?
+  ipAddress String?  @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+  @@map("audit_log")
+}
