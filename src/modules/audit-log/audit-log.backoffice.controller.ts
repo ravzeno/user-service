@@ -7,7 +7,7 @@ import {
   ApiSecurity,
   ApiUnauthorizedResponse,
 } from "@nestjs/swagger";
-import { RequirePermissions } from "../../common/decorators/require-permissions.decorator.js";
+import { RequirePermission } from "../../common/decorators/require-permissions.decorator.js";
 import { PermissionGuard } from "../../common/guards/permission.guard.js";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard.js";
 import { PRISMA_CLIENT } from "../../prisma/prisma.client.js";
@@ -99,7 +99,7 @@ export class AuditLogBackofficeController {
       },
     },
   })
-  @RequirePermissions("core_audit_log:list")
+  @RequirePermission("core_audit_log:list")
   async list(@Query("page") page = "1", @Query("limit") limit = "50") {
     const parsedPage = Math.trunc(Number(page) || 1);
     const parsedLimit = Math.trunc(Number(limit) || 50);

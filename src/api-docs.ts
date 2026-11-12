@@ -46,6 +46,28 @@ export async function setupBetterAuthDocs(app: INestApplication) {
   const publicBasePath = getPublicBasePath();
   const document = await auth.api.generateOpenAPISchema();
   document.servers = [{ url: `${publicBasePath}/api/auth` }];
+  const sessionSchema =
+    document.paths["/get-session"]?.get?.responses?.["200"]?.content?.[
+      "application/json"
+    ]?.schema;
+  if (sessionSchema?.properties) {
+    sessionSchema.properties.user = {
+      allOf: [
+        { $ref: "#/components/schemas/User" },
+        {
+          type: "object",
+          properties: {
+            permissions: {
+              type: "array",
+              items: { type: "string" },
+              description: "Effective permissions from active groups.",
+            },
+          },
+          required: ["permissions"],
+        },
+      ],
+    };
+  }
 
   app.use("/api/auth/docs/json", (_request: Request, response: Response) =>
     response.json(document),

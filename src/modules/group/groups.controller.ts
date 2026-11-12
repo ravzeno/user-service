@@ -19,7 +19,7 @@ import {
   ApiSecurity,
   ApiTags,
 } from "@nestjs/swagger";
-import { RequirePermissions } from "../../common/decorators/require-permissions.decorator.js";
+import { RequirePermission } from "../../common/decorators/require-permissions.decorator.js";
 import { PermissionGuard } from "../../common/guards/permission.guard.js";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard.js";
 import {
@@ -70,7 +70,7 @@ export class GroupsController {
 
   @Get("groups")
   @ApiResponse({ status: 200, type: GroupListItemDto, isArray: true })
-  @RequirePermissions("core_group:list")
+  @RequirePermission("core_group:list")
   listGroups() {
     return this.groups.list();
   }
@@ -80,7 +80,7 @@ export class GroupsController {
   @ApiResponse({ status: 201, type: GroupResponseDto })
   @apiError(400)
   @apiError(409)
-  @RequirePermissions("core_group:create")
+  @RequirePermission("core_group:create")
   createGroup(
     @Body() dto: CreateGroupDto,
     @Req() req: Request & { authContext: { user: { id: string } } },
@@ -92,7 +92,7 @@ export class GroupsController {
   @ApiParam({ name: "id", type: String })
   @ApiResponse({ status: 200, type: GroupDetailResponseDto })
   @apiError(404)
-  @RequirePermissions("core_group:view")
+  @RequirePermission("core_group:view")
   getGroup(@Param("id") id: string) {
     return this.groups.get(id);
   }
@@ -102,7 +102,7 @@ export class GroupsController {
   @ApiResponse({ status: 200, type: GroupMembersResponseDto })
   @apiError(400)
   @apiError(404)
-  @RequirePermissions("core_group:view")
+  @RequirePermission("core_group:view")
   listGroupUsers(
     @Param("id") id: string,
     @Query() query: GroupMembersQueryDto,
@@ -116,7 +116,7 @@ export class GroupsController {
   @ApiResponse({ status: 200, type: GroupResponseDto })
   @apiError(400)
   @apiError(404)
-  @RequirePermissions("core_group:edit")
+  @RequirePermission("core_group:edit")
   updateGroup(
     @Param("id") id: string,
     @Body() dto: UpdateGroupDto,
@@ -130,7 +130,7 @@ export class GroupsController {
   @ApiResponse({ status: 200, type: GroupDeletedResponseDto })
   @apiError(400)
   @apiError(404)
-  @RequirePermissions("core_group:delete")
+  @RequirePermission("core_group:delete")
   deleteGroup(
     @Param("id") id: string,
     @Req() req: Request & { authContext: { user: { id: string } } },
@@ -144,7 +144,7 @@ export class GroupsController {
   @ApiResponse({ status: 200, type: GroupDetailResponseDto })
   @apiError(400)
   @apiError(404)
-  @RequirePermissions("core_group:assign_permissions")
+  @RequirePermission("core_group:assign_permissions")
   setPermissions(
     @Param("id") id: string,
     @Body() dto: SetPermissionsDto,
@@ -159,7 +159,7 @@ export class GroupsController {
   @ApiResponse({ status: 200, type: GroupMemberAssignedResponseDto })
   @apiError(400)
   @apiError(404)
-  @RequirePermissions("core_group:assign_users")
+  @RequirePermission("core_group:assign_users")
   assignUser(
     @Param("id") groupId: string,
     @Param("userId") userId: string,
@@ -174,7 +174,7 @@ export class GroupsController {
   @ApiResponse({ status: 200, type: GroupMemberRemovedResponseDto })
   @apiError(400)
   @apiError(404)
-  @RequirePermissions("core_group:remove_user")
+  @RequirePermission("core_group:remove_user")
   removeUser(
     @Param("id") groupId: string,
     @Param("userId") userId: string,
@@ -189,7 +189,7 @@ export class GroupsController {
   @ApiResponse({ status: 200, type: GroupDetailResponseDto })
   @apiError(400)
   @apiError(404)
-  @RequirePermissions("core_group:remove_permission")
+  @RequirePermission("core_group:remove_permission")
   async removePermission(
     @Param("id") id: string,
     @Param("permission") permission: string,

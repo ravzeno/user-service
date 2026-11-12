@@ -15,7 +15,7 @@ import {
   ApiSecurity,
   ApiUnauthorizedResponse,
 } from "@nestjs/swagger";
-import { RequirePermissions } from "../../common/decorators/require-permissions.decorator.js";
+import { RequirePermission } from "../../common/decorators/require-permissions.decorator.js";
 import { PermissionGuard } from "../../common/guards/permission.guard.js";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard.js";
 import { PRISMA_CLIENT } from "../../prisma/prisma.client.js";
@@ -36,7 +36,7 @@ export class PermissionBackofficeController {
   constructor(@Inject(PRISMA_CLIENT) private readonly prisma: PrismaClient) {}
 
   @Get()
-  @ApiQuery({ name: "appName", required: false, enum: ["core", "customer"] })
+  @ApiQuery({ name: "appName", required: false, enum: ["core"] })
   @ApiBadRequestResponse({
     description: "Invalid appName",
     schema: httpErrorSchema,
@@ -55,13 +55,13 @@ export class PermissionBackofficeController {
       },
     },
   })
-  @RequirePermissions("core_permission:list")
+  @RequirePermission("core_permission:list")
   list(@Query("appName") appName?: string) {
-    if (appName !== undefined && appName !== "core" && appName !== "customer") {
-      throw new BadRequestException("appName must be core or customer");
+    if (appName !== undefined && appName !== "core") {
+      throw new BadRequestException("appName must be core");
     }
     return this.prisma.permission.findMany({
-      where: appName ? { appName } : undefined,
+      where: { appName: "core" },
       select: { key: true, label: true, appName: true },
       orderBy: [{ appName: "asc" }, { key: "asc" }],
     });

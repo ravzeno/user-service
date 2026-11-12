@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Patch, Req, UseGuards } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Get,
+  Header,
+  Patch,
+  Req,
+  UseGuards,
+} from "@nestjs/common";
 import type { Request } from "express";
 import {
   ApiBadRequestResponse,
@@ -8,10 +16,12 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from "@nestjs/swagger";
+import { EffectivePermissionsService } from "../../common/guards/effective-permissions.service.js";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard.js";
 import { UpdateMyProfileDto } from "./dto/user.dto.js";
 import { UsersService } from "./users.service.js";
 import {
+  EffectivePermissionsResponseDto,
   UserDetailResponseDto,
   UserHttpErrorDto,
   UserResponseDto,
@@ -24,12 +34,27 @@ import {
 @Controller("me")
 @UseGuards(SessionAuthGuard)
 export class UsersMeController {
-  constructor(private readonly users: UsersService) {}
+  constructor(
+    private readonly users: UsersService,
+    private readonly permissions: EffectivePermissionsService,
+  ) {}
 
   @Get()
   @ApiOkResponse({ type: UserDetailResponseDto })
   getMe(@Req() request: Request & { authContext: { user: { id: string } } }) {
     return this.users.me(request.authContext.user.id);
+  }
+
+  @Get("permissions")
+  @Header("Cache-Control", "no-store")
+  @ApiOkResponse({ type: EffectivePermissionsResponseDto })
+  async getPermissions(
+    @Req()
+    request: Request & { authContext: { user: { id: string; role: string } } },
+  ) {
+    return {
+      permissions: await this.permissions.forUser(request.authContext.user),
+    };
   }
 
   @Patch()

@@ -2,47 +2,48 @@ import {
   CanActivate,
   ExecutionContext,
   ForbiddenException,
-  Inject,
   Injectable,
 } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
-import type { PrismaClient } from "@prisma/client";
 import type { Request } from "express";
-import { REQUIRED_PERMISSIONS } from "../decorators/require-permissions.decorator.js";
-import { PRISMA_CLIENT } from "../../prisma/prisma.client.js";
-import type { PermissionKey } from "../../lib/permissions/app/core-permission.js";
+import {
+  REQUIRED_PERMISSIONS,
+  type RequiredPermissions,
+} from "../decorators/require-permissions.decorator.js";
+import { EffectivePermissionsService } from "./effective-permissions.service.js";
 
 @Injectable()
 export class PermissionGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
-    @Inject(PRISMA_CLIENT) private readonly prisma: PrismaClient,
+    private readonly permissions: EffectivePermissionsService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const required = this.reflector.getAllAndOverride<PermissionKey[]>(
+    const required = this.reflector.getAllAndOverride<RequiredPermissions>(
       REQUIRED_PERMISSIONS,
       [context.getHandler(), context.getClass()],
     );
-    if (!required?.length) return true;
+    if (!required) return true;
 
     const request = context
       .switchToHttp()
-      .getRequest<Request & { authContext?: { user: { id: string } } }>();
+      .getRequest<
+        Request & { authContext?: { user: { id: string; role: string } } }
+      >();
     const userId = request.authContext?.user.id;
     if (!userId)
       throw new ForbiddenException("Authenticated user context is missing");
 
-    const memberships = await this.prisma.userGroup.findMany({
-      where: { userId, group: { active: true, deletedAt: null } },
-      select: {
-        group: { select: { permissions: { select: { permission: true } } } },
-      },
-    });
     const actual = new Set(
-      memberships.flatMap((m) => m.group.permissions.map((p) => p.permission)),
+      await this.permissions.forUser(request.authContext!.user),
     );
-    if (!required.every((permission) => actual.has(permission))) {
+    const hasAccess =
+      required.permissions.length > 0 &&
+      (required.mode === "all"
+        ? required.permissions.every((permission) => actual.has(permission))
+        : required.permissions.some((permission) => actual.has(permission)));
+    if (!hasAccess) {
       throw new ForbiddenException("Insufficient permission");
     }
     return true;

@@ -211,6 +211,9 @@ export class UsersService {
         data: { role: dto.role },
         select: safeUserSelect,
       });
+      if (dto.role === "customer") {
+        await tx.userGroup.deleteMany({ where: { userId: id } });
+      }
       await this.audit(tx, actorId, "user.set-role", id, { role: dto.role });
       return updated;
     });
@@ -306,7 +309,7 @@ export class UsersService {
     const user = await this.requireActive(id);
     if (user.role === "root") {
       throw new ForbiddenException(
-        "The bootstrap administrator cannot be changed by backoffice APIs",
+        "The root administrator cannot be changed by backoffice APIs",
       );
     }
   }

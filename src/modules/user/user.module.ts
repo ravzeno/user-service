@@ -1,3 +1,4 @@
+import { EffectivePermissionsService } from "../../common/guards/effective-permissions.service.js";
 import { Module } from "@nestjs/common";
 import { InternalApiKeyGuard } from "../../common/guards/internal-api-key.guard.js";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard.js";
@@ -12,6 +13,7 @@ import { UsersService } from "./users.service.js";
     UsersService,
     SessionAuthGuard,
     PermissionGuard,
+    EffectivePermissionsService,
     InternalApiKeyGuard,
   ],
   exports: [UsersService],

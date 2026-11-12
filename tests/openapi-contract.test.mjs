@@ -49,7 +49,7 @@ test("generated OpenAPI is complete and matches HTTP responses", async (t) => {
 
   await t.test("all documented successful operations describe their response body", () => {
     for (const [path, method] of [
-      ["/api/health", "get"], ["/api/me", "get"], ["/api/me", "patch"],
+      ["/api/health", "get"], ["/api/me/permissions", "get"], ["/api/me", "get"], ["/api/me", "patch"],
       ["/api/internal/users", "get"], ["/api/internal/users/{id}", "get"], ["/api/internal/users/by-email/{email}", "get"],
       ["/api/backoffice/users", "get"], ["/api/backoffice/users", "post"],
       ...["get", "patch", "delete"].map((method) => ["/api/backoffice/users/{id}", method]),
@@ -120,6 +120,7 @@ test("generated OpenAPI is complete and matches HTTP responses", async (t) => {
     const cases = [
       ["/api/health", "/api/health", {}],
       ["/api/me", "/api/me", { "x-test-auth": "yes" }],
+      ["/api/me/permissions", "/api/me/permissions", { "x-test-auth": "yes" }],
       ["/api/backoffice/users?page=1&limit=2", "/api/backoffice/users", { "x-test-auth": "yes" }],
       ["/api/backoffice/groups", "/api/backoffice/groups", { "x-test-auth": "yes" }],
       ["/api/backoffice/groups/group-1", "/api/backoffice/groups/{id}", { "x-test-auth": "yes" }],

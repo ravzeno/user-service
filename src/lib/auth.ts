@@ -1,7 +1,8 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { APIError } from "better-auth/api";
-import { openAPI } from "better-auth/plugins";
+import { customSession, openAPI } from "better-auth/plugins";
+import { EffectivePermissionsService } from "../common/guards/effective-permissions.service.js";
 import { prisma } from "../prisma/prisma.client.js";
 import { sendAuthEmail } from "./email/mail.js";
 import { lineOAuthPlugins } from "./plugin/index.js";
@@ -29,6 +30,8 @@ const trustedOrigins = (
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
+
+const effectivePermissions = new EffectivePermissionsService(prisma);
 
 export const auth = betterAuth({
   appName: "User Service",
@@ -68,6 +71,33 @@ export const auth = betterAuth({
     },
   },
   plugins: [
+    customSession(async ({ user, session }, ctx) => {
+      const currentUser = await prisma.user.findUnique({
+        where: { id: user.id },
+        select: { role: true, deletedAt: true, banned: true, banExpires: true },
+      });
+      const banExpired =
+        !!currentUser?.banExpires && currentUser.banExpires <= new Date();
+      const available =
+        currentUser &&
+        !currentUser.deletedAt &&
+        (!currentUser.banned || banExpired);
+      const permissions = available
+        ? await effectivePermissions.forUser({
+            id: user.id,
+            role: currentUser.role,
+          })
+        : [];
+      ctx.setHeader("Cache-Control", "no-store");
+      return {
+        session,
+        user: {
+          ...user,
+          ...(currentUser ? { role: currentUser.role } : {}),
+          permissions,
+        },
+      };
+    }),
     ...lineOAuthPlugins,
     ...(process.env.ENABLE_API_DOCS === "true"
       ? [openAPI({ disableDefaultReference: true })]
@@ -83,38 +113,7 @@ export const auth = betterAuth({
                 "An email address is required. Enable email permission for the LINE Login channel.",
             });
           }
-          const profileGroup = await prisma.group.findFirst({
-            where: {
-              slug: "customer-profile-access",
-              isSystem: true,
-              active: true,
-              deletedAt: null,
-            },
-            select: { id: true },
-          });
-          if (!profileGroup) {
-            throw new APIError("INTERNAL_SERVER_ERROR", {
-              message: "Account registration is temporarily unavailable.",
-            });
-          }
           return { data: user };
-        },
-        after: async (user) => {
-          const customerGroup = await prisma.group.findFirst({
-            where: {
-              slug: "customer-profile-access",
-              isSystem: true,
-              active: true,
-              deletedAt: null,
-            },
-            select: { id: true },
-          });
-          if (customerGroup) {
-            await prisma.userGroup.createMany({
-              data: [{ userId: user.id, groupId: customerGroup.id }],
-              skipDuplicates: true,
-            });
-          }
         },
       },
     },

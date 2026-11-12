@@ -11,7 +11,7 @@ const { createApplication } = await import("../dist/app.factory.js");
 const date = new Date("2026-01-02T03:04:05.000Z");
 const user = {
   id: "user-1", name: "Example", email: "user@example.com",
-  emailVerified: true, image: null, phoneNumber: null, role: "customer",
+  emailVerified: true, image: null, phoneNumber: null, role: "staff",
   banned: false, banReason: null, banExpires: null, deletedAt: null,
   createdAt: date, updatedAt: date,
 };

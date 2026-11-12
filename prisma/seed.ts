@@ -36,54 +36,6 @@ async function main() {
       deletedAt: null,
     },
   });
-  const existingCustomerGroup = await prisma.group.findUnique({
-    where: { slug: "customer-profile-access" },
-    select: {
-      isSystem: true,
-      permissions: {
-        where: {
-          permission: {
-            notIn: ["customer_profile:get", "customer_profile:update"],
-          },
-        },
-        select: { permission: true },
-      },
-    },
-  });
-  if (
-    existingCustomerGroup &&
-    (!existingCustomerGroup.isSystem ||
-      existingCustomerGroup.permissions.length)
-  ) {
-    throw new Error("Customer profile group has unsafe existing configuration");
-  }
-  const customerGroup = await prisma.group.upsert({
-    where: { slug: "customer-profile-access" },
-    create: {
-      slug: "customer-profile-access",
-      name: "Customer profile access",
-      description: "Default access to the authenticated user's own profile",
-      active: true,
-      isSystem: true,
-      createdBy: "system",
-      updatedBy: "system",
-    },
-    update: { active: true, isSystem: true, deletedAt: null },
-  });
-  await prisma.groupPermission.createMany({
-    data: ["customer_profile:get", "customer_profile:update"].map(
-      (permission) => ({
-        groupId: customerGroup.id,
-        permission,
-      }),
-    ),
-    skipDuplicates: true,
-  });
-  await prisma.$executeRaw`
-    INSERT INTO "user_group" ("userId", "groupId")
-    SELECT "id", ${customerGroup.id} FROM "user" WHERE "deletedAt" IS NULL
-    ON CONFLICT ("userId", "groupId") DO NOTHING
-  `;
   const staffGroup = await prisma.group.upsert({
     where: { slug: "backoffice-staff" },
     create: {
@@ -124,37 +76,6 @@ async function main() {
       "core_audit_log:list",
     ].map((permission) => ({ groupId: staffGroup.id, permission })),
   });
-
-  const adminEmail = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim().toLowerCase();
-  if (adminEmail) {
-    const adminUser = await prisma.user.findUnique({
-      where: { email: adminEmail },
-    });
-    if (!adminUser) {
-      console.warn(
-        "Bootstrap account was not found. Sign up and verify this email, then run the seed again.",
-      );
-    } else if (!adminUser.emailVerified) {
-      console.warn(
-        "Bootstrap account email is not verified; no root permissions were assigned.",
-      );
-    } else {
-      await prisma.$transaction([
-        prisma.user.update({
-          where: { id: adminUser.id },
-          data: { role: "root" },
-        }),
-        prisma.userGroup.upsert({
-          where: {
-            userId_groupId: { userId: adminUser.id, groupId: rootGroup.id },
-          },
-          create: { userId: adminUser.id, groupId: rootGroup.id },
-          update: {},
-        }),
-      ]);
-      console.info("Granted root administrator access to " + adminEmail);
-    }
-  }
 
   console.info(
     "Seeded " + permissionCatalog.length + " permissions and default groups.",

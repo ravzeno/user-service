@@ -40,25 +40,23 @@ Run `npm run test:contract` to build and check the generated contract against HT
 
 In development without SMTP, verification and reset links are written to the local server console. Configure SMTP before production use. Google and LINE login are enabled only when their client ID and secret are configured. Set the OAuth callback URLs in their provider consoles to `/api/auth/callback/google` and `/api/auth/oauth2/callback/line` on the configured Better Auth URL. For LINE, enable email address permission in the LINE Login channel.
 
-## First backoffice administrator
+## Backoffice permissions
 
-1. Sign up through Better Auth at `POST /api/auth/sign-up/email` and verify the account.
-2. Set `BOOTSTRAP_ADMIN_EMAIL` to that verified email in `.env`.
-3. Run `npm run db:seed`.
+Run `npm run db:seed` to create the permission catalog, a read-only backoffice staff group, and a root administrator group. The seed grants the root group all catalog permissions but does not assign any user to it. Root account provisioning is managed separately.
 
-The seed creates the permission catalog, a default customer group, a read-only backoffice staff group, and a root administrator group. It grants the root group all catalog permissions. The seed only assigns root access to an existing verified account. Do not set this environment variable to an untrusted address.
-
-New public signups are assigned to the customer group after the seed has run. Backoffice accounts can be assigned to groups using the group membership endpoints.
+Public signups have the customer role and do not receive permissions or group memberships. Assign the staff role before adding a backoffice account to a group. Changing a user to customer removes their group memberships.
 
 ## Auth endpoints
 
 Better Auth is mounted below `/api/auth`, including email signup/sign-in, email verification, password reset, sign-out, and social sign-in. Social sign-in uses `POST /api/auth/sign-in/social` with provider `google` or `line`. Sessions use secure HTTP-only cookies in production; configure `TRUSTED_ORIGINS` for the front-end origins.
 
-The authenticated user profile is available at `GET /api/me` and can be updated at `PATCH /api/me`.
+`GET /api/auth/get-session` includes a `user.permissions` array for an authenticated session, alongside `session`. Permissions and role are read from the database on each request; customers and unavailable accounts receive an empty array. The response is marked `Cache-Control: no-store`. Unauthenticated sessions still return `null`.
+
+The authenticated user profile is available at `GET /api/me` and can be updated at `PATCH /api/me`. `GET /api/me/permissions` returns `{ "permissions": ["core_user:list"] }` for the current session: the deduplicated keys from active, undeleted groups. Customers receive an empty array. Refresh this endpoint when access may have changed; the server still checks permissions on every protected request.
 
 ## Backoffice API
 
-Every route below requires a valid Better Auth session plus the listed permission. Permission checks use the union of permissions from all active groups.
+Every route below requires a valid Better Auth session plus the listed permission. Controllers declare required keys with `@RequirePermission("core_user:list")`. For multiple keys, `@RequirePermission(["core_user:list", "core_user:get"])` requires any one by default; pass `"all"` as the second argument to require every key. Permission checks use the union of permissions from all active groups. Define new keys and labels in `src/lib/permissions/app/core-permission.ts`; the catalog and key type are derived from this metadata.
 
 | Method | Route | Permission |
 | --- | --- | --- |
@@ -75,15 +73,15 @@ Every route below requires a valid Better Auth session plus the listed permissio
 | GET | `/api/backoffice/permissions` | `core_permission:list` |
 | GET | `/api/backoffice/audit-logs` | `core_audit_log:list` |
 
-`GET /api/backoffice/users` accepts optional `q`, `page`, `limit`, and `scope` query parameters. `scope=customer` lists customer accounts; `scope=backoffice` lists all other roles, including bootstrap roles.
+`GET /api/backoffice/users` accepts optional `q`, `page`, `limit`, and `scope` query parameters. `scope=customer` lists customer accounts; `scope=backoffice` lists all other roles, including root.
 
 `GET /api/backoffice/groups/:id/users` returns paginated member profiles as `{ items, page, limit, total }`. `page` defaults to 1, `limit` defaults to 20 (maximum 100), and soft-deleted users are excluded.
 
 `GET /api/backoffice/permissions` returns each permission's internal `key`, display `label`, and `appName`.
 
-The catalog separates `core_*` permissions from `customer_profile:get` and `customer_profile:update`. Filter the catalog with `?appName=core` or `?appName=customer`. The protected system group `customer-profile-access` grants authenticated users their own profile permissions. Existing users are enrolled by the migration; new users are enrolled at signup. Apply migrations before starting the updated application.
+The catalog contains `core_*` backoffice permissions and can be filtered with `?appName=core`. Customers can access their own profile using a valid session without permissions. The initial migration targets a fresh database; the seed creates no customer group or permissions.
 
-User creation requires a password of at least 12 characters. Better Auth's generic admin plugin is not exposed; account changes go through the permission-checked backoffice API. The public role endpoint cannot grant `root`, and root group membership is reserved for the bootstrap seed.
+User creation requires a password of at least 12 characters. Better Auth's generic admin plugin is not exposed; account changes go through the permission-checked backoffice API. The public role endpoint cannot grant `root`, and root group membership is managed separately.
 
 Changing a user's email resets its verified status and sends a verification email. The update response includes `emailVerificationSent`; if delivery fails, resend through Better Auth at `POST /api/auth/send-verification-email` with the updated address. Password resets revoke the user's existing sessions.
 

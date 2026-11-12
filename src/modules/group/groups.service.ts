@@ -241,14 +241,19 @@ export class GroupsService {
     }
     if (group.slug === "root-admin") {
       throw new BadRequestException(
-        "Root administrator membership can only be granted through the bootstrap seed",
+        "Root administrator membership is managed separately",
       );
     }
     const user = await this.prisma.user.findFirst({
       where: { id: userId, deletedAt: null },
-      select: { id: true },
+      select: { id: true, role: true },
     });
     if (!user) throw new NotFoundException("User not found");
+    if (user.role !== "staff" && user.role !== "root") {
+      throw new BadRequestException(
+        "Only backoffice users can be assigned to groups",
+      );
+    }
     await this.prisma.$transaction(async (tx) => {
       await tx.userGroup.upsert({
         where: { userId_groupId: { userId, groupId } },

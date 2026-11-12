@@ -24,7 +24,7 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from "@nestjs/swagger";
-import { RequirePermissions } from "../../common/decorators/require-permissions.decorator.js";
+import { RequirePermission } from "../../common/decorators/require-permissions.decorator.js";
 import { PermissionGuard } from "../../common/guards/permission.guard.js";
 import { SessionAuthGuard } from "../../common/guards/session-auth.guard.js";
 import { PRISMA_CLIENT } from "../../prisma/prisma.client.js";
@@ -63,7 +63,7 @@ export class BackofficeUserController {
   @Get()
   @ApiOkResponse({ type: UserPageResponseDto })
   @ApiBadRequestResponse({ type: UserHttpErrorDto })
-  @RequirePermissions("core_user:list")
+  @RequirePermission("core_user:list")
   list(@Query() query: ListUsersQueryDto) {
     return this.users.list(query.q, query.page, query.limit, query.scope);
   }
@@ -72,7 +72,7 @@ export class BackofficeUserController {
   @ApiCreatedResponse({ type: UserDetailResponseDto })
   @ApiBadRequestResponse({ type: UserHttpErrorDto })
   @ApiConflictResponse({ type: UserHttpErrorDto })
-  @RequirePermissions("core_user:create")
+  @RequirePermission("core_user:create")
   create(
     @Body() dto: CreateUserDto,
     @Req() request: Request & { authContext: { user: { id: string } } },
@@ -83,7 +83,7 @@ export class BackofficeUserController {
   @Get(":id")
   @ApiOkResponse({ type: UserDetailResponseDto })
   @ApiNotFoundResponse({ type: UserHttpErrorDto })
-  @RequirePermissions("core_user:get")
+  @RequirePermission("core_user:get")
   get(@Param("id") id: string) {
     return this.users.get(id);
   }
@@ -93,7 +93,7 @@ export class BackofficeUserController {
   @ApiBadRequestResponse({ type: UserHttpErrorDto })
   @ApiNotFoundResponse({ type: UserHttpErrorDto })
   @ApiConflictResponse({ type: UserHttpErrorDto })
-  @RequirePermissions("core_user:update")
+  @RequirePermission("core_user:update")
   update(
     @Param("id") id: string,
     @Body() dto: UpdateUserDto,
@@ -106,7 +106,7 @@ export class BackofficeUserController {
   @ApiOkResponse({ type: UserResponseDto })
   @ApiBadRequestResponse({ type: UserHttpErrorDto })
   @ApiNotFoundResponse({ type: UserHttpErrorDto })
-  @RequirePermissions("core_user:set-role")
+  @RequirePermission("core_user:set-role")
   setRole(
     @Param("id") id: string,
     @Body() dto: UpdateRoleDto,
@@ -119,7 +119,7 @@ export class BackofficeUserController {
   @ApiCreatedResponse({ type: UserResponseDto })
   @ApiBadRequestResponse({ type: UserHttpErrorDto })
   @ApiNotFoundResponse({ type: UserHttpErrorDto })
-  @RequirePermissions("core_user:ban")
+  @RequirePermission("core_user:ban")
   ban(
     @Param("id") id: string,
     @Body() dto: BanUserDto,
@@ -136,7 +136,7 @@ export class BackofficeUserController {
   @Delete(":id/ban")
   @ApiOkResponse({ type: UserResponseDto })
   @ApiNotFoundResponse({ type: UserHttpErrorDto })
-  @RequirePermissions("core_user:ban")
+  @RequirePermission("core_user:ban")
   unban(
     @Param("id") id: string,
     @Req() request: Request & { authContext: { user: { id: string } } },
@@ -152,7 +152,7 @@ export class BackofficeUserController {
   @Delete(":id")
   @ApiOkResponse({ type: DeletedUserResponseDto })
   @ApiNotFoundResponse({ type: UserHttpErrorDto })
-  @RequirePermissions("core_user:delete")
+  @RequirePermission("core_user:delete")
   delete(
     @Param("id") id: string,
     @Req() request: Request & { authContext: { user: { id: string } } },
@@ -163,7 +163,7 @@ export class BackofficeUserController {
   @Get(":id/sessions")
   @ApiOkResponse({ type: SessionResponseDto, isArray: true })
   @ApiNotFoundResponse({ type: UserHttpErrorDto })
-  @RequirePermissions("core_session:list")
+  @RequirePermission("core_session:list")
   listSessions(@Param("id") id: string) {
     return this.users.listSessions(id);
   }
@@ -171,7 +171,7 @@ export class BackofficeUserController {
   @Delete(":id/sessions/:sessionId")
   @ApiOkResponse({ type: RevokedSessionResponseDto })
   @ApiNotFoundResponse({ type: UserHttpErrorDto })
-  @RequirePermissions("core_session:revoke")
+  @RequirePermission("core_session:revoke")
   revokeSession(
     @Param("id") id: string,
     @Param("sessionId") sessionId: string,
@@ -182,7 +182,7 @@ export class BackofficeUserController {
 
   @Get(":id/groups")
   @ApiOkResponse({ type: UserGroupSummaryDto, isArray: true })
-  @RequirePermissions("core_user:get")
+  @RequirePermission("core_user:get")
   groups(@Param("id") id: string) {
     return this.prisma.userGroup
       .findMany({

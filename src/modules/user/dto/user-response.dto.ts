@@ -81,3 +81,11 @@ export class UserHttpErrorDto {
   message!: string | string[];
   @ApiProperty() error!: string;
 }
+
+export class EffectivePermissionsResponseDto {
+  @ApiProperty({
+    type: [String],
+    description: "Effective permission keys from active groups.",
+  })
+  permissions!: string[];
+}
