@@ -8,6 +8,10 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { Prisma, type PrismaClient } from "@prisma/client";
+import {
+  AvatarStorageService,
+  type AvatarFile,
+} from "./avatar-storage.service.js";
 import { auth } from "../../lib/auth.js";
 import { PRISMA_CLIENT } from "../../prisma/prisma.client.js";
 import type {
@@ -34,7 +38,10 @@ const safeUserSelect = {
 
 @Injectable()
 export class UsersService {
-  constructor(@Inject(PRISMA_CLIENT) private readonly prisma: PrismaClient) {}
+  constructor(
+    @Inject(PRISMA_CLIENT) private readonly prisma: PrismaClient,
+    private readonly avatars: AvatarStorageService,
+  ) {}
 
   async list(q = "", page = 1, limit = 20, scope?: "customer" | "backoffice") {
     const parsedPage = Math.trunc(Number(page) || 1);
@@ -201,6 +208,38 @@ export class UsersService {
       ...updated,
       ...(emailVerificationSent === undefined ? {} : { emailVerificationSent }),
     };
+  }
+
+  async updateAvatar(id: string, file: AvatarFile | undefined) {
+    await this.requireActive(id);
+    const uploaded = await this.avatars.upload(file);
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const result = await tx.user.updateMany({
+          where: { id, deletedAt: null },
+          data: { image: uploaded.url },
+        });
+        if (!result.count) throw new NotFoundException("User not found");
+        const user = await tx.user.findUniqueOrThrow({
+          where: { id },
+          select: safeUserSelect,
+        });
+        await this.audit(tx, id, "user.update", id, {
+          changedFields: ["image"],
+        });
+        return user;
+      });
+    } catch (error) {
+      try {
+        await this.avatars.remove(uploaded.key);
+      } catch {
+        Logger.warn(
+          "Failed to remove avatar after profile update failed",
+          UsersService.name,
+        );
+      }
+      throw error;
+    }
   }
 
   async setRole(id: string, dto: UpdateRoleDto, actorId: string) {

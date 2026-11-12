@@ -4,12 +4,20 @@ import {
   Get,
   Header,
   Patch,
+  Post,
   Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
+import type { AvatarFile } from "./avatar-storage.service.js";
 import type { Request } from "express";
 import {
   ApiBadRequestResponse,
+  ApiBody,
+  ApiConsumes,
+  ApiCreatedResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiSecurity,
@@ -55,6 +63,29 @@ export class UsersMeController {
     return {
       permissions: await this.permissions.forUser(request.authContext.user),
     };
+  }
+
+  @Post("avatar")
+  @UseInterceptors(
+    FileInterceptor("file", {
+      limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+    }),
+  )
+  @ApiConsumes("multipart/form-data")
+  @ApiBody({
+    schema: {
+      type: "object",
+      required: ["file"],
+      properties: { file: { type: "string", format: "binary" } },
+    },
+  })
+  @ApiCreatedResponse({ type: UserResponseDto })
+  @ApiBadRequestResponse({ type: UserHttpErrorDto })
+  uploadAvatar(
+    @Req() request: Request & { authContext: { user: { id: string } } },
+    @UploadedFile() file: AvatarFile | undefined,
+  ) {
+    return this.users.updateAvatar(request.authContext.user.id, file);
   }
 
   @Patch()
