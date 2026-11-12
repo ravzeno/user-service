@@ -23,6 +23,21 @@ User identity service for public users and backoffice operators. It uses NestJS,
 
 The API listens on port 3001 by default. Health check: `GET /api/health`.
 
+### API documentation
+
+Set `ENABLE_API_DOCS=true` to enable the Scalar documentation pages. The local `.env.example` enables them by default:
+
+- `http://localhost:3001/api/docs` — NestJS service endpoints.
+- `http://localhost:3001/api/docs/json` — NestJS OpenAPI JSON for client generation.
+- `http://localhost:3001/api/auth/docs` — Better Auth endpoints.
+- `http://localhost:3001/api/auth/docs/json` — Better Auth OpenAPI schema as JSON.
+
+Leave `API_DOCS_BASE_PATH` empty for a root deployment. If a reverse proxy publishes the service under a path such as `/user-service`, set `API_DOCS_BASE_PATH=/user-service` so Scalar's “Try it out” targets the correct public URLs. Keep `ENABLE_API_DOCS` disabled in production unless the documentation pages are intended to be public.
+
+For frontend client generation, run `npm run build`, start the built service with `ENABLE_API_DOCS=true npm run start:prod`, and fetch `curl http://localhost:3001/api/docs/json -o user-service.openapi.json`. Use this JSON as the input to your OpenAPI TypeScript generator. The NestJS schema covers service routes; Better Auth has its own schema at `/api/auth/docs/json`.
+
+Run `npm run test:contract` to build and check the generated contract against HTTP responses with mocked database and session dependencies. A live PostgreSQL integration is not covered. Group update `name` and `active` should be omitted when unchanged: the current validator accepts `null`, but the database rejects it.
+
 In development without SMTP, verification and reset links are written to the local server console. Configure SMTP before production use. Google and LINE login are enabled only when their client ID and secret are configured. Set the OAuth callback URLs in their provider consoles to `/api/auth/callback/google` and `/api/auth/oauth2/callback/line` on the configured Better Auth URL. For LINE, enable email address permission in the LINE Login channel.
 
 ## First backoffice administrator
@@ -54,10 +69,19 @@ Every route below requires a valid Better Auth session plus the listed permissio
 | GET, DELETE | `/api/backoffice/users/:id/sessions` | `core_session:list`, `core_session:revoke` |
 | GET, POST | `/api/backoffice/groups` | `core_group:list`, `core_group:create` |
 | GET, PATCH, DELETE | `/api/backoffice/groups/:id` | `core_group:view`, `core_group:edit`, `core_group:delete` |
+| GET | `/api/backoffice/groups/:id/users` | `core_group:view` |
 | PUT | `/api/backoffice/groups/:id/permissions` | `core_group:assign_permissions` |
 | PUT, DELETE | `/api/backoffice/groups/:id/users/:userId` | `core_group:assign_users`, `core_group:remove_user` |
 | GET | `/api/backoffice/permissions` | `core_permission:list` |
 | GET | `/api/backoffice/audit-logs` | `core_audit_log:list` |
+
+`GET /api/backoffice/users` accepts optional `q`, `page`, `limit`, and `scope` query parameters. `scope=customer` lists customer accounts; `scope=backoffice` lists all other roles, including bootstrap roles.
+
+`GET /api/backoffice/groups/:id/users` returns paginated member profiles as `{ items, page, limit, total }`. `page` defaults to 1, `limit` defaults to 20 (maximum 100), and soft-deleted users are excluded.
+
+`GET /api/backoffice/permissions` returns each permission's internal `key`, display `label`, and `appName`.
+
+The catalog separates `core_*` permissions from `customer_profile:get` and `customer_profile:update`. Filter the catalog with `?appName=core` or `?appName=customer`. The protected system group `customer-profile-access` grants authenticated users their own profile permissions. Existing users are enrolled by the migration; new users are enrolled at signup. Apply migrations before starting the updated application.
 
 User creation requires a password of at least 12 characters. Better Auth's generic admin plugin is not exposed; account changes go through the permission-checked backoffice API. The public role endpoint cannot grant `root`, and root group membership is reserved for the bootstrap seed.
 

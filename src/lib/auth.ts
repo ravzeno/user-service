@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { APIError } from "better-auth/api";
+import { openAPI } from "better-auth/plugins";
 import { prisma } from "../prisma/prisma.client.js";
 import { sendAuthEmail } from "./email/mail.js";
 import { lineOAuthPlugins } from "./plugin/index.js";
@@ -66,7 +67,12 @@ export const auth = betterAuth({
       role: { type: "string", required: false, input: false },
     },
   },
-  plugins: [...lineOAuthPlugins],
+  plugins: [
+    ...lineOAuthPlugins,
+    ...(process.env.ENABLE_API_DOCS === "true"
+      ? [openAPI({ disableDefaultReference: true })]
+      : []),
+  ],
   databaseHooks: {
     user: {
       create: {
@@ -77,11 +83,30 @@ export const auth = betterAuth({
                 "An email address is required. Enable email permission for the LINE Login channel.",
             });
           }
+          const profileGroup = await prisma.group.findFirst({
+            where: {
+              slug: "customer-profile-access",
+              isSystem: true,
+              active: true,
+              deletedAt: null,
+            },
+            select: { id: true },
+          });
+          if (!profileGroup) {
+            throw new APIError("INTERNAL_SERVER_ERROR", {
+              message: "Account registration is temporarily unavailable.",
+            });
+          }
           return { data: user };
         },
         after: async (user) => {
-          const customerGroup = await prisma.group.findUnique({
-            where: { slug: "customer" },
+          const customerGroup = await prisma.group.findFirst({
+            where: {
+              slug: "customer-profile-access",
+              isSystem: true,
+              active: true,
+              deletedAt: null,
+            },
             select: { id: true },
           });
           if (customerGroup) {

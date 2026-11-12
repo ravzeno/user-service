@@ -47,27 +47,127 @@ export const corePermission = {
   },
 } as const;
 
-export const permissionCatalog = [
-  "core_user:list",
-  "core_user:get",
-  "core_user:create",
-  "core_user:update",
-  "core_user:delete",
-  "core_user:set-role",
-  "core_user:ban",
-  "core_session:list",
-  "core_session:revoke",
-  "core_group:list",
-  "core_group:view",
-  "core_group:create",
-  "core_group:edit",
-  "core_group:delete",
-  "core_group:assign_permissions",
-  "core_group:remove_permission",
-  "core_group:assign_users",
-  "core_group:remove_user",
-  "core_permission:list",
-  "core_audit_log:list",
+export const corePermissionDefinitions = [
+  {
+    key: "core_user:list",
+    label: corePermission.core.resources.user.actions.list.label,
+    appName: "core",
+  },
+  {
+    key: "core_user:get",
+    label: corePermission.core.resources.user.actions.get.label,
+    appName: "core",
+  },
+  {
+    key: "core_user:create",
+    label: corePermission.core.resources.user.actions.create.label,
+    appName: "core",
+  },
+  {
+    key: "core_user:update",
+    label: corePermission.core.resources.user.actions.update.label,
+    appName: "core",
+  },
+  {
+    key: "core_user:delete",
+    label: corePermission.core.resources.user.actions.delete.label,
+    appName: "core",
+  },
+  {
+    key: "core_user:set-role",
+    label: corePermission.core.resources.user.actions["set-role"].label,
+    appName: "core",
+  },
+  {
+    key: "core_user:ban",
+    label: corePermission.core.resources.user.actions.ban.label,
+    appName: "core",
+  },
+  {
+    key: "core_session:list",
+    label: corePermission.core.resources.session.actions.list.label,
+    appName: "core",
+  },
+  {
+    key: "core_session:revoke",
+    label: corePermission.core.resources.session.actions.revoke.label,
+    appName: "core",
+  },
+  {
+    key: "core_group:list",
+    label: corePermission.core.resources.group.actions.list.label,
+    appName: "core",
+  },
+  {
+    key: "core_group:view",
+    label: corePermission.core.resources.group.actions.view.label,
+    appName: "core",
+  },
+  {
+    key: "core_group:create",
+    label: corePermission.core.resources.group.actions.create.label,
+    appName: "core",
+  },
+  {
+    key: "core_group:edit",
+    label: corePermission.core.resources.group.actions.edit.label,
+    appName: "core",
+  },
+  {
+    key: "core_group:delete",
+    label: corePermission.core.resources.group.actions.delete.label,
+    appName: "core",
+  },
+  {
+    key: "core_group:assign_permissions",
+    label: corePermission.core.resources.group.actions.assign_permissions.label,
+    appName: "core",
+  },
+  {
+    key: "core_group:remove_permission",
+    label: corePermission.core.resources.group.actions.remove_permission.label,
+    appName: "core",
+  },
+  {
+    key: "core_group:assign_users",
+    label: corePermission.core.resources.group.actions.assign_users.label,
+    appName: "core",
+  },
+  {
+    key: "core_group:remove_user",
+    label: corePermission.core.resources.group.actions.remove_user.label,
+    appName: "core",
+  },
+  {
+    key: "core_permission:list",
+    label: corePermission.core.resources.permission.actions.list.label,
+    appName: "core",
+  },
+  {
+    key: "core_audit_log:list",
+    label: corePermission.core.resources.audit_log.actions.list.label,
+    appName: "core",
+  },
 ] as const;
 
-export type PermissionKey = (typeof permissionCatalog)[number];
+export const customerPermissionDefinitions = [
+  {
+    key: "customer_profile:get",
+    label: "ดูข้อมูลส่วนตัว",
+    appName: "customer",
+  },
+  {
+    key: "customer_profile:update",
+    label: "แก้ไขข้อมูลส่วนตัว",
+    appName: "customer",
+  },
+] as const;
+
+export const permissionDefinitions = [
+  ...corePermissionDefinitions,
+  ...customerPermissionDefinitions,
+] as const;
+
+export const permissionCatalog = permissionDefinitions.map(({ key }) => key);
+
+export type PermissionKey = (typeof permissionDefinitions)[number]["key"];

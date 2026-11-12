@@ -120,11 +120,11 @@ model GroupPermission {
 }
 
 model Permission {
-  key         String   @id @db.VarChar(120)
-  description String   @db.VarChar(255)
-  appName     String   @default("core") @db.VarChar(100)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  key       String   @id @db.VarChar(120)
+  label     String   @db.VarChar(255)
+  appName   String   @db.VarChar(100)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("permission")
 }

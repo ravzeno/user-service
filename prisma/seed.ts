@@ -1,16 +1,20 @@
 import "dotenv/config";
 import { prisma } from "../src/prisma/prisma.client.js";
-import { permissionCatalog } from "../src/lib/permissions/app/core-permission.js";
+import {
+  permissionCatalog,
+  permissionDefinitions,
+} from "../src/lib/permissions/app/core-permission.js";
 
 async function main() {
-  for (const key of permissionCatalog) {
+  for (const { key, label, appName } of permissionDefinitions) {
     await prisma.permission.upsert({
       where: { key },
       create: {
         key,
-        description: key.replaceAll("_", " ").replace(":", " — "),
+        label,
+        appName,
       },
-      update: { description: key.replaceAll("_", " ").replace(":", " — ") },
+      update: { label, appName },
     });
   }
 
@@ -32,19 +36,54 @@ async function main() {
       deletedAt: null,
     },
   });
+  const existingCustomerGroup = await prisma.group.findUnique({
+    where: { slug: "customer-profile-access" },
+    select: {
+      isSystem: true,
+      permissions: {
+        where: {
+          permission: {
+            notIn: ["customer_profile:get", "customer_profile:update"],
+          },
+        },
+        select: { permission: true },
+      },
+    },
+  });
+  if (
+    existingCustomerGroup &&
+    (!existingCustomerGroup.isSystem ||
+      existingCustomerGroup.permissions.length)
+  ) {
+    throw new Error("Customer profile group has unsafe existing configuration");
+  }
   const customerGroup = await prisma.group.upsert({
-    where: { slug: "customer" },
+    where: { slug: "customer-profile-access" },
     create: {
-      slug: "customer",
-      name: "Customer",
-      description: "Default group for public signups",
+      slug: "customer-profile-access",
+      name: "Customer profile access",
+      description: "Default access to the authenticated user's own profile",
       active: true,
       isSystem: true,
       createdBy: "system",
       updatedBy: "system",
     },
-    update: { name: "Customer", active: true, isSystem: true, deletedAt: null },
+    update: { active: true, isSystem: true, deletedAt: null },
   });
+  await prisma.groupPermission.createMany({
+    data: ["customer_profile:get", "customer_profile:update"].map(
+      (permission) => ({
+        groupId: customerGroup.id,
+        permission,
+      }),
+    ),
+    skipDuplicates: true,
+  });
+  await prisma.$executeRaw`
+    INSERT INTO "user_group" ("userId", "groupId")
+    SELECT "id", ${customerGroup.id} FROM "user" WHERE "deletedAt" IS NULL
+    ON CONFLICT ("userId", "groupId") DO NOTHING
+  `;
   const staffGroup = await prisma.group.upsert({
     where: { slug: "backoffice-staff" },
     create: {
@@ -70,9 +109,6 @@ async function main() {
       groupId: rootGroup.id,
       permission,
     })),
-  });
-  await prisma.groupPermission.deleteMany({
-    where: { groupId: customerGroup.id },
   });
   await prisma.groupPermission.deleteMany({
     where: { groupId: staffGroup.id },

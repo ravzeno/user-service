@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from "@nestjs/common";
 import { Prisma, type PrismaClient } from "@prisma/client";
@@ -35,7 +36,7 @@ const safeUserSelect = {
 export class UsersService {
   constructor(@Inject(PRISMA_CLIENT) private readonly prisma: PrismaClient) {}
 
-  async list(q = "", page = 1, limit = 20) {
+  async list(q = "", page = 1, limit = 20, scope?: "customer" | "backoffice") {
     const parsedPage = Math.trunc(Number(page) || 1);
     const parsedLimit = Math.trunc(Number(limit) || 20);
     const safePage = Number.isSafeInteger(parsedPage)
@@ -44,17 +45,20 @@ export class UsersService {
     const safeLimit = Number.isSafeInteger(parsedLimit)
       ? Math.min(100, Math.max(1, parsedLimit))
       : 20;
-    const where = {
-      deletedAt: null,
-      ...(q.trim()
-        ? {
-            OR: [
-              { email: { contains: q.trim(), mode: "insensitive" as const } },
-              { name: { contains: q.trim(), mode: "insensitive" as const } },
-            ],
-          }
-        : {}),
-    };
+    const filters: Prisma.UserWhereInput[] = [{ deletedAt: null }];
+    if (q.trim()) {
+      filters.push({
+        OR: [
+          { email: { contains: q.trim(), mode: "insensitive" } },
+          { name: { contains: q.trim(), mode: "insensitive" } },
+        ],
+      });
+    }
+    if (scope === "customer") filters.push({ role: "customer" });
+    if (scope === "backoffice") {
+      filters.push({ role: { not: "customer" } });
+    }
+    const where: Prisma.UserWhereInput = { AND: filters };
     const [items, total] = await this.prisma.$transaction([
       this.prisma.user.findMany({
         where,
@@ -86,20 +90,65 @@ export class UsersService {
       where: { email: dto.email },
     });
     if (existing) throw new ConflictException("Email is already registered");
+    const requestedEmail = dto.email.trim().toLowerCase();
+    // Better Auth commits its signup transaction independently of this
+    // service's Prisma client. Persist an audit attempt first so a later
+    // signup failure cannot leave a newly created account with no audit row.
+    const auditEvent = await this.prisma.auditLog.create({
+      data: {
+        actorId,
+        action: "user.create",
+        metadata: { email: requestedEmail, status: "pending" },
+      },
+      select: { id: true },
+    });
     let created: Awaited<ReturnType<typeof auth.api.signUpEmail>>;
     try {
       created = await auth.api.signUpEmail({
         body: { name: dto.name, email: dto.email, password: dto.password },
       });
     } catch (error) {
+      try {
+        const userAfterFailure = await this.prisma.user.findUnique({
+          where: { email: requestedEmail },
+          select: { id: true },
+        });
+        await this.prisma.auditLog.update({
+          where: { id: auditEvent.id },
+          data: {
+            metadata: {
+              email: requestedEmail,
+              status: userAfterFailure ? "indeterminate" : "failed",
+            },
+          },
+        });
+      } catch (auditError) {
+        Logger.error(
+          `Failed to mark user.create audit event ${auditEvent.id} as failed`,
+          auditError instanceof Error ? auditError.stack : undefined,
+          UsersService.name,
+        );
+      }
       if (error instanceof ConflictException) throw error;
       throw new BadRequestException(
         "Unable to create user. Check email verification and mail configuration.",
       );
     }
-    await this.audit(actorId, "user.create", created.user.id, {
-      email: created.user.email,
-    });
+    try {
+      await this.prisma.auditLog.update({
+        where: { id: auditEvent.id },
+        data: {
+          targetId: created.user.id,
+          metadata: { email: created.user.email, status: "completed" },
+        },
+      });
+    } catch (error) {
+      Logger.error(
+        `Failed to finalize user.create audit event ${auditEvent.id} for ${created.user.id}`,
+        error instanceof Error ? error.stack : undefined,
+        UsersService.name,
+      );
+    }
     return this.get(created.user.id);
   }
 
@@ -126,10 +175,16 @@ export class UsersService {
       data.email = requestedEmail;
       data.emailVerified = false;
     }
-    const updated = await this.prisma.user.update({
-      where: { id },
-      data,
-      select: safeUserSelect,
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.update({
+        where: { id },
+        data,
+        select: safeUserSelect,
+      });
+      await this.audit(tx, actorId, "user.update", id, {
+        changedFields: Object.keys(data),
+      });
+      return user;
     });
     let emailVerificationSent: boolean | undefined;
     if (emailChanged && requestedEmail) {
@@ -142,10 +197,6 @@ export class UsersService {
         emailVerificationSent = false;
       }
     }
-    await this.audit(actorId, "user.update", id, {
-      changedFields: Object.keys(data),
-      ...(emailVerificationSent === undefined ? {} : { emailVerificationSent }),
-    });
     return {
       ...updated,
       ...(emailVerificationSent === undefined ? {} : { emailVerificationSent }),
@@ -154,25 +205,27 @@ export class UsersService {
 
   async setRole(id: string, dto: UpdateRoleDto, actorId: string) {
     await this.requireNonRoot(id);
-    const updated = await this.prisma.user.update({
-      where: { id },
-      data: { role: dto.role },
-      select: safeUserSelect,
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.user.update({
+        where: { id },
+        data: { role: dto.role },
+        select: safeUserSelect,
+      });
+      await this.audit(tx, actorId, "user.set-role", id, { role: dto.role });
+      return updated;
     });
-    await this.audit(actorId, "user.set-role", id, { role: dto.role });
-    return updated;
   }
 
   async softDelete(id: string, actorId: string) {
     await this.requireNonRoot(id);
-    await this.prisma.$transaction([
-      this.prisma.user.update({
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
         where: { id },
         data: { deletedAt: new Date() },
-      }),
-      this.prisma.session.deleteMany({ where: { userId: id } }),
-    ]);
-    await this.audit(actorId, "user.soft-delete", id);
+      });
+      await tx.session.deleteMany({ where: { userId: id } });
+      await this.audit(tx, actorId, "user.soft-delete", id);
+    });
     return { id, deleted: true };
   }
 
@@ -183,23 +236,26 @@ export class UsersService {
     actorId: string,
   ) {
     await this.requireNonRoot(id);
-    const user = await this.prisma.user.update({
-      where: { id },
-      data: {
-        banned,
-        banReason: banned ? reason || "Suspended by backoffice" : null,
-        banExpires: null,
-      },
-      select: safeUserSelect,
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.update({
+        where: { id },
+        data: {
+          banned,
+          banReason: banned ? reason || "Suspended by backoffice" : null,
+          banExpires: null,
+        },
+        select: safeUserSelect,
+      });
+      if (banned) await tx.session.deleteMany({ where: { userId: id } });
+      await this.audit(
+        tx,
+        actorId,
+        banned ? "user.ban" : "user.unban",
+        id,
+        banned ? { reason: user.banReason } : undefined,
+      );
+      return user;
     });
-    if (banned) await this.prisma.session.deleteMany({ where: { userId: id } });
-    await this.audit(
-      actorId,
-      banned ? "user.ban" : "user.unban",
-      id,
-      banned ? { reason: user.banReason } : undefined,
-    );
-    return user;
   }
 
   async listSessions(id: string) {
@@ -219,14 +275,18 @@ export class UsersService {
   }
 
   async revokeSession(id: string, sessionId: string, actorId: string) {
-    const session = await this.prisma.session.findFirst({
-      where: { id: sessionId, userId: id },
-      select: { id: true },
+    return this.prisma.$transaction(async (tx) => {
+      const session = await tx.session.findFirst({
+        where: { id: sessionId, userId: id },
+        select: { id: true },
+      });
+      if (!session) throw new NotFoundException("Session not found");
+      await tx.session.delete({ where: { id: sessionId } });
+      await this.audit(tx, actorId, "session.revoke", sessionId, {
+        userId: id,
+      });
+      return { id: sessionId, revoked: true };
     });
-    if (!session) throw new NotFoundException("Session not found");
-    await this.prisma.session.delete({ where: { id: sessionId } });
-    await this.audit(actorId, "session.revoke", sessionId, { userId: id });
-    return { id: sessionId, revoked: true };
   }
 
   async me(id: string) {
@@ -252,12 +312,13 @@ export class UsersService {
   }
 
   private async audit(
+    client: Pick<Prisma.TransactionClient, "auditLog">,
     actorId: string,
     action: string,
     targetId: string,
     metadata?: Prisma.InputJsonValue,
   ) {
-    await this.prisma.auditLog.create({
+    await client.auditLog.create({
       data: {
         actorId,
         action,

@@ -8,8 +8,20 @@ import {
   UseGuards,
 } from "@nestjs/common";
 import type { PrismaClient } from "@prisma/client";
+import {
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiQuery,
+  ApiSecurity,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from "@nestjs/swagger";
 import { InternalApiKeyGuard } from "../../common/guards/internal-api-key.guard.js";
 import { PRISMA_CLIENT } from "../../prisma/prisma.client.js";
+import {
+  InternalUserResponseDto,
+  UserHttpErrorDto,
+} from "./dto/user-response.dto.js";
 
 const internalUserSelect = {
   id: true,
@@ -21,12 +33,19 @@ const internalUserSelect = {
   createdAt: true,
 } as const;
 
+@ApiTags("Internal users")
+@ApiSecurity("internalApiKey")
+@ApiUnauthorizedResponse({ type: UserHttpErrorDto })
 @Controller("internal/users")
 @UseGuards(InternalApiKeyGuard)
 export class UserInternalController {
   constructor(@Inject(PRISMA_CLIENT) private readonly prisma: PrismaClient) {}
 
   @Get()
+  @ApiOkResponse({ type: InternalUserResponseDto, isArray: true })
+  @ApiQuery({ name: "q", required: false, type: String })
+  @ApiQuery({ name: "email", required: false, type: String })
+  @ApiQuery({ name: "phoneNumber", required: false, type: String })
   async search(
     @Query("q") q?: string,
     @Query("email") email?: string,
@@ -58,6 +77,8 @@ export class UserInternalController {
   }
 
   @Get("by-email/:email")
+  @ApiOkResponse({ type: InternalUserResponseDto })
+  @ApiNotFoundResponse({ type: UserHttpErrorDto })
   async byEmail(@Param("email") email: string) {
     const user = await this.prisma.user.findFirst({
       where: { email: { equals: email, mode: "insensitive" }, deletedAt: null },
@@ -68,6 +89,8 @@ export class UserInternalController {
   }
 
   @Get(":id")
+  @ApiOkResponse({ type: InternalUserResponseDto })
+  @ApiNotFoundResponse({ type: UserHttpErrorDto })
   async get(@Param("id") id: string) {
     const user = await this.prisma.user.findFirst({
       where: { id, deletedAt: null },
