@@ -38,6 +38,12 @@ For frontend client generation, run `npm run build`, start the built service wit
 
 Run `npm run test:contract` to build and check the generated contract against HTTP responses with mocked database and session dependencies. A live PostgreSQL integration is not covered. Group update `name` and `active` should be omitted when unchanged: the current validator accepts `null`, but the database rejects it.
 
+## Continuous integration
+
+GitHub Actions runs Prisma validation, the build, and all tests on every push and pull request. View the result in the repository's **Actions** tab or in the commit or pull request checks: a green check means the checks passed; a red cross means a check failed. Open the run for logs. The tests use mocked external dependencies and do not verify a live PostgreSQL connection or deployment. Git push completes before CI finishes. GitHub notification preferences control whether you receive email about failed runs.
+
+To receive CI results in Discord, create a webhook for the desired Discord channel, then add its URL as a repository secret named `DISCORD_WEBHOOK_URL` under GitHub **Settings → Secrets and variables → Actions**. After CI succeeds or fails, an embed includes the repository, branch, commit, actor, message, status, and Actions log link. Pull requests show the PR title as the message. Notifications are skipped when the secret is unavailable (including pull requests from forks); cancelled runs are not reported. Keep the webhook URL secret.
+
 In development without SMTP, verification and reset links are written to the local server console. Configure SMTP before production use. Google and LINE login are enabled only when their client ID and secret are configured. Set the OAuth callback URLs in their provider consoles to `/api/auth/callback/google` and `/api/auth/oauth2/callback/line` on the configured Better Auth URL. For LINE, enable email address permission in the LINE Login channel.
 
 ## Backoffice permissions
