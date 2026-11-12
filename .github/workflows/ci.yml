@@ -8,8 +8,16 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    name: Build and test
+  checkout:
+    name: Checkout
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+  build:
+    name: Build
+    needs: checkout
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -25,12 +33,57 @@ jobs:
       - run: npm run prisma:generate
       - run: npm run db:validate
       - run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: dist/
+          if-no-files-found: error
+          retention-days: 1
+
+  lint:
+    name: Linter
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5432/test?schema=public
+      BETTER_AUTH_SECRET: ci-test-secret-only-not-for-production-123456789
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run prisma:generate
+      - run: npm run lint
+
+  test:
+    name: Unit test
+    needs: [build, lint]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: postgresql://test:test@localhost:5432/test?schema=public
+      BETTER_AUTH_SECRET: ci-test-secret-only-not-for-production-123456789
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run prisma:generate
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-output
+          path: dist/
       - run: node --test tests/*.test.mjs
 
   notify-discord:
     name: Notify Discord
-    needs: test
-    if: ${{ always() && (needs.test.result == 'success' || needs.test.result == 'failure') }}
+    needs: [checkout, build, lint, test]
+    if: ${{ !cancelled() && (needs.checkout.result == 'failure' || needs.build.result == 'failure' || needs.lint.result == 'failure' || needs.test.result == 'success' || needs.test.result == 'failure') }}
     runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions: {}
@@ -38,7 +91,10 @@ jobs:
       - name: Send CI result
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          CI_RESULT: ${{ needs.test.result }}
+          CHECKOUT_RESULT: ${{ needs.checkout.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          LINT_RESULT: ${{ needs.lint.result }}
+          TEST_RESULT: ${{ needs.test.result }}
           COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           COMMIT_MESSAGE: ${{ github.event.head_commit.message || github.event.pull_request.title }}
           BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
@@ -52,7 +108,8 @@ jobs:
             console.log('Discord notification skipped: DISCORD_WEBHOOK_URL is unavailable.');
             process.exit(0);
           }
-          const success = process.env.CI_RESULT === 'success';
+          const success = [process.env.CHECKOUT_RESULT, process.env.BUILD_RESULT, process.env.LINT_RESULT, process.env.TEST_RESULT].every((value) => value === 'success');
+          const result = (value) => ({ success: '✅ SUCCESS', failure: '❌ FAIL', skipped: '⏭️ SKIPPED', cancelled: '⏹️ CANCELLED' })[value] || value || 'Unknown';
           const field = (name, value, inline = false) => ({
             name, value: (value || 'Unknown').slice(0, 1024), inline,
           });
@@ -67,6 +124,10 @@ jobs:
                 field('Commit', process.env.COMMIT_SHA.slice(0, 7), true),
                 field('By', process.env.ACTOR, true),
                 field('Message', process.env.COMMIT_MESSAGE),
+                field('Checkout', result(process.env.CHECKOUT_RESULT), true),
+                field('Build', result(process.env.BUILD_RESULT), true),
+                field('Linter', result(process.env.LINT_RESULT), true),
+                field('Unit test', result(process.env.TEST_RESULT), true),
                 field('Status', success ? '✅ SUCCESS' : '❌ FAIL'),
                 field('Log', process.env.RUN_URL),
               ],
