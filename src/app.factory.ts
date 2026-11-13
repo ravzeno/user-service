@@ -3,6 +3,7 @@ import "reflect-metadata";
 import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { toNodeHandler } from "better-auth/node";
+import type { Request, Response, NextFunction } from "express";
 import { setupApiDocs, setupBetterAuthDocs } from "./api-docs.js";
 import { AppModule } from "./app.module.js";
 import { auth } from "./lib/auth.js";
@@ -21,6 +22,16 @@ export async function createApplication() {
     await setupApiDocs(app);
     await setupBetterAuthDocs(app);
   }
+  app.use("/api/email-verification-result", (req: Request, res: Response, next: NextFunction) => {
+    if (req.method !== "GET" || req.path !== "/") return next();
+    const failed = typeof req.query.error === "string";
+    res.set("Cache-Control", "no-store").type("html").send(`<!doctype html>
+<html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>ยืนยันอีเมล</title></head>
+<body style="font-family:system-ui,sans-serif;max-width:36rem;margin:5rem auto;padding:0 1.5rem;line-height:1.6">
+<h1>${failed ? "ยืนยันอีเมลไม่สำเร็จ" : "ยืนยันอีเมลสำเร็จ"}</h1>
+<p>${failed ? "ลิงก์อาจหมดอายุหรือไม่ถูกต้อง กรุณาขอลิงก์ยืนยันใหม่" : "คุณสามารถกลับไปเข้าสู่ระบบได้แล้ว"}</p>
+</body></html>`);
+  });
   app.use("/api/auth", toNodeHandler(auth));
   app.useGlobalPipes(
     new ValidationPipe({

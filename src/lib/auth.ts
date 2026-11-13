@@ -54,14 +54,18 @@ export const auth = betterAuth({
     requireEmailVerification: true,
     revokeSessionsOnPasswordReset: true,
     sendResetPassword: async ({ user, url }) => {
-      await sendAuthEmail(user.email, "Reset your password", url);
+      await sendAuthEmail(user.email, "password-reset", url);
     },
   },
   emailVerification: {
     sendOnSignUp: true,
     autoSignInAfterVerification: true,
     sendVerificationEmail: async ({ user, url }) => {
-      await sendAuthEmail(user.email, "Verify your email address", url);
+      const verificationUrl = new URL(url);
+      if (verificationUrl.searchParams.get("callbackURL") === "/") {
+        verificationUrl.searchParams.set("callbackURL", "/api/email-verification-result");
+      }
+      await sendAuthEmail(user.email, "verification", verificationUrl.toString());
     },
   },
   user: {

@@ -44,7 +44,9 @@ GitHub Actions runs **Checkout**, **Build**, **Linter**, **Unit test**, and **No
 
 To receive CI results in Discord, create a webhook for the desired Discord channel, then add its URL as a repository secret named `DISCORD_WEBHOOK_URL` under GitHub **Settings → Secrets and variables → Actions**. After CI succeeds or fails, Discord receives the repository, branch, commit, actor, message, overall status, and a link to the Actions log. Pull requests show the PR title as the message. Notifications are skipped when the secret is unavailable (including pull requests from forks); cancelled runs are not reported. Keep the webhook URL secret.
 
-In development without SMTP, verification and reset links are written to the local server console. Configure SMTP before production use. Google and LINE login are enabled only when their client ID and secret are configured. Set the OAuth callback URLs in their provider consoles to `/api/auth/callback/google` and `/api/auth/oauth2/callback/line` on the configured Better Auth URL. For LINE, enable email address permission in the LINE Login channel.
+Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, and `SMTP_FROM` in `.env` using your email provider's SMTP settings. Use a sender address the provider permits, and set `SMTP_SECURE=true` for implicit TLS (normally port 465) or `false` for STARTTLS (normally port 587). If the provider requires an app password, use it instead of your account password. Restart the service after changing these settings. Authentication emails fail if `SMTP_HOST` is missing; they are not delivered via the console. Set `BETTER_AUTH_URL` to the publicly reachable service URL so verification links work for recipients. Existing unverified users can request another link with `POST /api/auth/send-verification-email`.
+
+Google and LINE login are enabled only when their client ID and secret are configured. Set the OAuth callback URLs in their provider consoles to `/api/auth/callback/google` and `/api/auth/oauth2/callback/line` on the configured Better Auth URL. For LINE, enable email address permission in the LINE Login channel.
 
 ## Backoffice permissions
 
