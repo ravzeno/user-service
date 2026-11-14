@@ -5,6 +5,47 @@ import { PermissionGuard } from "../dist/common/guards/permission.guard.js";
 import { GroupsService } from "../dist/modules/group/groups.service.js";
 import { UsersService } from "../dist/modules/user/users.service.js";
 import { permissionCatalog } from "../dist/lib/permissions/app/core-permission.js";
+import { PermissionBackofficeController } from "../dist/modules/permission/permission.backoffice.controller.js";
+import { PermissionInternalController } from "../dist/modules/permission/permission.internal.controller.js";
+import { InternalApiKeyGuard } from "../dist/common/guards/internal-api-key.guard.js";
+
+test("internal catalog requires an API key and filters by application", async () => {
+  const previous = process.env.INTERNAL_API_KEY;
+  process.env.INTERNAL_API_KEY = "test-internal-api-key-at-least-32-characters";
+  try {
+    const guard = new InternalApiKeyGuard();
+    const request = (key) => ({ switchToHttp: () => ({ getRequest: () => ({ headers: key ? { "x-api-key": key } : {} }) }) });
+    assert.throws(() => guard.canActivate(request()), { status: 401 });
+    assert.throws(() => guard.canActivate(request("wrong")), { status: 401 });
+    assert.equal(guard.canActivate(request(process.env.INTERNAL_API_KEY)), true);
+    let query;
+    const controller = new PermissionInternalController({ permission: { findMany: async (value) => { query = value; return []; } } });
+    await controller.list("dropper");
+    assert.deepEqual(query.where, { appName: "dropper" });
+    await controller.list();
+    assert.deepEqual(query.where, {});
+    assert.throws(() => controller.list("unknown"), { status: 400 });
+  } finally {
+    if (previous === undefined) delete process.env.INTERNAL_API_KEY;
+    else process.env.INTERNAL_API_KEY = previous;
+  }
+});
+
+test("dropper permissions are available and can be filtered by app", async () => {
+  assert.ok(permissionCatalog.includes("dropper_device:list"));
+  assert.ok(permissionCatalog.includes("dropper_file:download"));
+  assert.ok(permissionCatalog.includes("dropper_pairing:approve"));
+  assert.equal(new Set(permissionCatalog).size, permissionCatalog.length);
+  const queries = [];
+  const controller = new PermissionBackofficeController({
+    permission: { findMany: async (query) => { queries.push(query); return []; } },
+  });
+  await controller.list();
+  await controller.list("dropper");
+  await controller.list("core");
+  assert.deepEqual(queries.map(({ where }) => where), [{}, { appName: "dropper" }, { appName: "core" }]);
+  assert.throws(() => controller.list("unknown"), { status: 400 });
+});
 
 const context = (role) => ({
   getHandler: () => {},

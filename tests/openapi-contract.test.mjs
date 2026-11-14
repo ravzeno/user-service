@@ -50,7 +50,7 @@ test("generated OpenAPI is complete and matches HTTP responses", async (t) => {
   await t.test("all documented successful operations describe their response body", () => {
     for (const [path, method] of [
       ["/api/health", "get"], ["/api/me/permissions", "get"], ["/api/me", "get"], ["/api/me", "patch"],
-      ["/api/internal/users", "get"], ["/api/internal/users/{id}", "get"], ["/api/internal/users/by-email/{email}", "get"],
+      ["/api/internal/users", "get"], ["/api/internal/users/{id}", "get"], ["/api/internal/users/by-email/{email}", "get"], ["/api/internal/permissions", "get"],
       ["/api/backoffice/users", "get"], ["/api/backoffice/users", "post"],
       ...["get", "patch", "delete"].map((method) => ["/api/backoffice/users/{id}", method]),
       ["/api/backoffice/users/{id}/role", "patch"], ["/api/backoffice/users/{id}/ban", "post"], ["/api/backoffice/users/{id}/ban", "delete"],
@@ -126,6 +126,7 @@ test("generated OpenAPI is complete and matches HTTP responses", async (t) => {
       ["/api/backoffice/groups/group-1", "/api/backoffice/groups/{id}", { "x-test-auth": "yes" }],
       ["/api/backoffice/groups/group-1/users?page=1&limit=2", "/api/backoffice/groups/{id}/users", { "x-test-auth": "yes" }],
       ["/api/internal/users", "/api/internal/users", { "x-api-key": "contract-test-internal-api-key-1234567890" }],
+      ["/api/internal/permissions?appName=dropper", "/api/internal/permissions", { "x-api-key": "contract-test-internal-api-key-1234567890" }],
       ["/api/backoffice/permissions", "/api/backoffice/permissions", { "x-test-auth": "yes" }],
       ["/api/backoffice/audit-logs?page=1&limit=2", "/api/backoffice/audit-logs", { "x-test-auth": "yes" }],
     ];
@@ -143,6 +144,7 @@ test("generated OpenAPI is complete and matches HTTP responses", async (t) => {
     }
     for (const [url, path, headers, status] of [
       ["/api/backoffice/users", "/api/backoffice/users", {}, 401],
+      ["/api/internal/permissions", "/api/internal/permissions", {}, 401],
       ["/api/backoffice/users?limit=101", "/api/backoffice/users", { "x-test-auth": "yes" }, 400],
       ["/api/backoffice/users?page=1.5", "/api/backoffice/users", { "x-test-auth": "yes" }, 400],
       ["/api/backoffice/groups/missing/users", "/api/backoffice/groups/{id}/users", { "x-test-auth": "yes" }, 404],

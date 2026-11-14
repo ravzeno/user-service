@@ -36,7 +36,7 @@ export class PermissionBackofficeController {
   constructor(@Inject(PRISMA_CLIENT) private readonly prisma: PrismaClient) {}
 
   @Get()
-  @ApiQuery({ name: "appName", required: false, enum: ["core"] })
+  @ApiQuery({ name: "appName", required: false, enum: ["core", "dropper"] })
   @ApiBadRequestResponse({
     description: "Invalid appName",
     schema: httpErrorSchema,
@@ -57,11 +57,11 @@ export class PermissionBackofficeController {
   })
   @RequirePermission("core_permission:list")
   list(@Query("appName") appName?: string) {
-    if (appName !== undefined && appName !== "core") {
-      throw new BadRequestException("appName must be core");
+    if (appName !== undefined && appName !== "core" && appName !== "dropper") {
+      throw new BadRequestException("appName must be core or dropper");
     }
     return this.prisma.permission.findMany({
-      where: { appName: "core" },
+      where: appName === undefined ? {} : { appName },
       select: { key: true, label: true, appName: true },
       orderBy: [{ appName: "asc" }, { key: "asc" }],
     });

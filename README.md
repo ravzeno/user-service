@@ -89,7 +89,7 @@ Every route below requires a valid Better Auth session plus the listed permissio
 
 `GET /api/backoffice/permissions` returns each permission's internal `key`, display `label`, and `appName`.
 
-The catalog contains `core_*` backoffice permissions and can be filtered with `?appName=core`. Customers can access their own profile using a valid session without permissions. The initial migration targets a fresh database; the seed creates no customer group or permissions.
+The catalog contains `core_*` and `dropper_*` permissions. Filter it with `?appName=core` or `?appName=dropper`; without a filter the endpoint returns both. Dropper permissions cover files, folders, trash, uploads, devices, pairing requests, and storage. Run `npm run db:seed` to add them to an existing database and grant them to the root group. The Dropper service must integrate with user-service and enforce these keys separately; adding the catalog does not change its authorization. Customers can access their own profile using a valid session without permissions. The initial migration targets a fresh database; the seed creates no customer group or permissions.
 
 User creation requires a password of at least 12 characters. Better Auth's generic admin plugin is not exposed; account changes go through the permission-checked backoffice API. The public role endpoint cannot grant `root`, and root group membership is managed separately.
 
@@ -104,5 +104,6 @@ Internal routes are read-only and require `x-api-key: <INTERNAL_API_KEY>` on eve
 - `GET /api/internal/users?phoneNumber=...`
 - `GET /api/internal/users/by-email/:email`
 - `GET /api/internal/users/:id`
+- `GET /api/internal/permissions?appName=dropper` (permission catalog for service integration; omit `appName` for all apps)
 
 Search results are capped at 100 records and exclude soft-deleted users. Never commit `.env` or send the API key in URLs or logs.

@@ -1,3 +1,8 @@
+import {
+  dropperPermissionDefinitions,
+  type DropperPermissionKey,
+} from "./dropper-permission.js";
+
 export const corePermission = {
   core: {
     label: "ระบบหลัก",
@@ -48,11 +53,12 @@ export const corePermission = {
 } as const;
 
 type CoreResources = typeof corePermission.core.resources;
-export type PermissionKey = {
+type CorePermissionKey = {
   [
     Resource in keyof CoreResources
   ]: `${"core"}_${Resource & string}:${keyof CoreResources[Resource]["actions"] & string}`;
 }[keyof CoreResources];
+export type PermissionKey = CorePermissionKey | DropperPermissionKey;
 
 // Derive the catalog from the same metadata used to define resources and actions.
 export const corePermissionDefinitions = Object.entries(
@@ -65,5 +71,8 @@ export const corePermissionDefinitions = Object.entries(
   })),
 );
 
-export const permissionDefinitions = corePermissionDefinitions;
+export const permissionDefinitions = [
+  ...corePermissionDefinitions,
+  ...dropperPermissionDefinitions,
+];
 export const permissionCatalog = permissionDefinitions.map(({ key }) => key);
