@@ -1,12 +1,11 @@
+# Central CI template: backend (reference: ravzeno/user-service)
+# Each build/lint/test is a distinct job. Render placeholders before use.
 name: CI
-
 on:
   push:
   pull_request:
-
 permissions:
   contents: read
-
 jobs:
   checkout:
     name: Checkout
@@ -14,76 +13,67 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-
   build:
     name: Build
     needs: checkout
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      DATABASE_URL: postgresql://test:test@localhost:5432/test?schema=public
-      BETTER_AUTH_SECRET: ci-test-secret-only-not-for-production-123456789
+      DATABASE_URL: "postgresql://test:test@localhost:5432/test?schema=public"
+      BETTER_AUTH_SECRET: "ci-test-secret-only-not-for-production-123456789"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: "24"
           cache: npm
       - run: npm ci
-      - run: npm run prisma:generate
-      - run: npm run db:validate
-      - run: npm run build
-      - uses: actions/upload-artifact@v4
-        with:
-          name: build-output
-          path: dist/
-          if-no-files-found: error
-          retention-days: 1
-
+      - run: "npm run prisma:generate"
+      - run: "npm run db:validate"
+      - name: Build
+        run: "npm run build"
   lint:
     name: Linter
-    needs: build
+    needs: checkout
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      DATABASE_URL: postgresql://test:test@localhost:5432/test?schema=public
-      BETTER_AUTH_SECRET: ci-test-secret-only-not-for-production-123456789
+      DATABASE_URL: "postgresql://test:test@localhost:5432/test?schema=public"
+      BETTER_AUTH_SECRET: "ci-test-secret-only-not-for-production-123456789"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: "24"
           cache: npm
       - run: npm ci
-      - run: npm run prisma:generate
-      - run: npm run lint
-
+      - run: "npm run prisma:generate"
+      - run: "npm run db:validate"
+      - name: Lint
+        run: "npm run lint"
   test:
     name: Unit test
-    needs: [build, lint]
+    needs: checkout
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      DATABASE_URL: postgresql://test:test@localhost:5432/test?schema=public
-      BETTER_AUTH_SECRET: ci-test-secret-only-not-for-production-123456789
+      DATABASE_URL: "postgresql://test:test@localhost:5432/test?schema=public"
+      BETTER_AUTH_SECRET: "ci-test-secret-only-not-for-production-123456789"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: "24"
           cache: npm
       - run: npm ci
-      - run: npm run prisma:generate
-      - uses: actions/download-artifact@v4
-        with:
-          name: build-output
-          path: dist/
-      - run: node --test tests/*.test.mjs
-
+      - run: "npm run prisma:generate"
+      - run: "npm run db:validate"
+      - name: Test
+        run: "node --test tests/*.test.mjs"
   notify-discord:
     name: Notify Discord
     needs: [checkout, build, lint, test]
-    if: ${{ !cancelled() && (needs.checkout.result == 'failure' || needs.build.result == 'failure' || needs.lint.result == 'failure' || needs.test.result == 'success' || needs.test.result == 'failure') }}
+    if: ${{ always() && !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 2
     permissions: {}
@@ -91,10 +81,7 @@ jobs:
       - name: Send CI result
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          CHECKOUT_RESULT: ${{ needs.checkout.result }}
-          BUILD_RESULT: ${{ needs.build.result }}
-          LINT_RESULT: ${{ needs.lint.result }}
-          TEST_RESULT: ${{ needs.test.result }}
+          JOB_RESULTS: ${{ toJSON(needs) }}
           COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           COMMIT_MESSAGE: ${{ github.event.head_commit.message || github.event.pull_request.title }}
           BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
@@ -103,27 +90,31 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           node <<'NODE'
+          // Shared notification script. Inlined into generated GitHub Actions workflow.
           const webhook = process.env.DISCORD_WEBHOOK_URL;
           if (!webhook) {
             console.log('Discord notification skipped: DISCORD_WEBHOOK_URL is unavailable.');
             process.exit(0);
           }
-          const success = [process.env.CHECKOUT_RESULT, process.env.BUILD_RESULT, process.env.LINT_RESULT, process.env.TEST_RESULT].every((value) => value === 'success');
+          const needs = JSON.parse(process.env.JOB_RESULTS || '{}');
+          const jobs = Object.entries(needs).map(([name, info]) => ({ name, result: info.result || 'unknown' }));
+          const success = jobs.length > 0 && jobs.every((job) => job.result === 'success');
           const field = (name, value, inline = false) => ({
-            name, value: (value || 'Unknown').slice(0, 1024), inline,
+            name, value: String(value || 'N/A').slice(0, 1024), inline,
           });
           const payload = {
             allowed_mentions: { parse: [] },
             embeds: [{
-              title: '🚀 Build event',
+              title: '🚀 CI event',
               color: success ? 0x2ecc71 : 0xe74c3c,
               fields: [
                 field('Repository', process.env.REPOSITORY, true),
                 field('Branch', process.env.BRANCH_NAME, true),
-                field('Commit', process.env.COMMIT_SHA.slice(0, 7), true),
+                field('Commit', (process.env.COMMIT_SHA || '').slice(0, 7), true),
                 field('By', process.env.ACTOR, true),
-                field('Message', process.env.COMMIT_MESSAGE),
+                ...jobs.map((job) => field(job.name, job.result, true)),
                 field('Status', success ? '✅ SUCCESS' : '❌ FAIL'),
+                field('Message', process.env.COMMIT_MESSAGE),
                 field('Log', process.env.RUN_URL),
               ],
             }],
