@@ -68,6 +68,8 @@ jobs:
       - run: npm ci
       - run: "npm run prisma:generate"
       - run: "npm run db:validate"
+      - name: Build for integration tests
+        run: npm run build
       - name: Test
         run: "node --test tests/*.test.mjs"
   notify-discord:
