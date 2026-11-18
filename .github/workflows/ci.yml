@@ -107,16 +107,15 @@ jobs:
           const payload = {
             allowed_mentions: { parse: [] },
             embeds: [{
-              title: '🚀 CI event',
+              title: '🚀 Build event',
               color: success ? 0x2ecc71 : 0xe74c3c,
               fields: [
                 field('Repository', process.env.REPOSITORY, true),
                 field('Branch', process.env.BRANCH_NAME, true),
                 field('Commit', (process.env.COMMIT_SHA || '').slice(0, 7), true),
                 field('By', process.env.ACTOR, true),
-                ...jobs.map((job) => field(job.name, job.result, true)),
-                field('Status', success ? '✅ SUCCESS' : '❌ FAIL'),
                 field('Message', process.env.COMMIT_MESSAGE),
+                field('Status', success ? '✅ SUCCESS' : '❌ FAIL'),
                 field('Log', process.env.RUN_URL),
               ],
             }],
