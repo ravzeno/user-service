@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
   build:
     name: Build
     needs: checkout
@@ -22,8 +22,8 @@ jobs:
       DATABASE_URL: "postgresql://test:test@localhost:5432/test?schema=public"
       BETTER_AUTH_SECRET: "ci-test-secret-only-not-for-production-123456789"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: "24"
           cache: npm
@@ -41,8 +41,8 @@ jobs:
       DATABASE_URL: "postgresql://test:test@localhost:5432/test?schema=public"
       BETTER_AUTH_SECRET: "ci-test-secret-only-not-for-production-123456789"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: "24"
           cache: npm
@@ -60,14 +60,16 @@ jobs:
       DATABASE_URL: "postgresql://test:test@localhost:5432/test?schema=public"
       BETTER_AUTH_SECRET: "ci-test-secret-only-not-for-production-123456789"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: "24"
           cache: npm
       - run: npm ci
       - run: "npm run prisma:generate"
       - run: "npm run db:validate"
+      - name: Prepare test dependencies
+        run: "npm run build"
       - name: Test
         run: "node --test tests/*.test.mjs"
   notify-discord:
